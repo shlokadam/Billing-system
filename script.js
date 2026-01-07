@@ -284,16 +284,24 @@ function updateMenuList() {
 
     list.innerHTML = menuData.map(mainItem => `
         <div class="menu-item">
-            <h3>${mainItem.name}</h3>
+            <h3>
+                ${mainItem.name}
+                <button class="btn btn-danger btn-small" onclick="deleteMainItem(${mainItem.id})">Delete</button>
+            </h3>
+
             ${mainItem.subItems.map(subItem => `
                 <div class="sub-item">
-                    <span>${subItem.name}</span>
-                    <span style="font-weight: 600; color: #764ba2;">₹${subItem.price}</span>
+                    <span>${subItem.name} — ₹${subItem.price}</span>
+                    <button class="btn btn-danger btn-small"
+                        onclick="deleteSubItem(${mainItem.id}, ${subItem.id})">
+                        Delete
+                    </button>
                 </div>
             `).join('')}
         </div>
     `).join('');
 }
+
 
 function updateAvailableItems() {
     const container = document.getElementById('availableItems');
@@ -319,6 +327,35 @@ function updateAvailableItems() {
         </div>
     `).join('');
 }
+
+function deleteMainItem(mainItemId) {
+    if (!confirm("Delete this main item and all its sub items?")) return;
+
+    menuData = menuData.filter(item => item.id !== mainItemId);
+
+    saveMenuData();
+    updateMenuList();
+    updateMainItemSelect();
+    updateAvailableItems();
+
+    showToast("Main item deleted");
+}
+
+function deleteSubItem(mainItemId, subItemId) {
+    if (!confirm("Delete this sub item?")) return;
+
+    const mainItem = menuData.find(item => item.id === mainItemId);
+    if (!mainItem) return;
+
+    mainItem.subItems = mainItem.subItems.filter(sub => sub.id !== subItemId);
+
+    saveMenuData();
+    updateMenuList();
+    updateAvailableItems();
+
+    showToast("Sub item deleted");
+}
+
 
 function toggleSubItems(mainItemId) {
     const subItemsContainer = document.getElementById(`sub-${mainItemId}`);
