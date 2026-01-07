@@ -305,28 +305,27 @@ function updateMenuList() {
 
 function updateAvailableItems() {
     const container = document.getElementById('availableItems');
+    
     if (menuData.length === 0) {
-        container.innerHTML = '<p style="color: #666;">No items available. Add items in Menu Management.</p>';
+        container.innerHTML = '<p style="color:#666;">No items available</p>';
         return;
     }
 
     container.innerHTML = menuData.map(mainItem => `
-        <div class="menu-item" onclick="toggleSubItems(${mainItem.id})">
-            <h3>${mainItem.name} <span style="float: right;">▼</span></h3>
-            <div class="sub-items-container" id="sub-${mainItem.id}">
-                ${mainItem.subItems.map(subItem => `
-                    <div class="sub-item">
-                        <div>
-                            <div>${subItem.name}</div>
-                            <div style="color: #764ba2; font-weight: 600;">₹${subItem.price}</div>
-                        </div>
-                        <button class="btn btn-primary" onclick="event.stopPropagation(); addToBill(${mainItem.id}, ${subItem.id})">Add</button>
+        <div class="category-block">
+            <h3>${mainItem.name}</h3>
+            <div class="item-grid">
+                ${mainItem.subItems.map(sub => `
+                    <div class="item-tile" onclick="addToBill(${mainItem.id}, ${sub.id})">
+                        <div class="item-name">${sub.name}</div>
+                        <div class="item-price">₹${sub.price}</div>
                     </div>
                 `).join('')}
             </div>
         </div>
     `).join('');
 }
+
 
 function deleteMainItem(mainItemId) {
     if (!confirm("Delete this main item and all its sub items?")) return;
