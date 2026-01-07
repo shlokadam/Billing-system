@@ -2,6 +2,8 @@
 let currentUser = null;
 let menuData = [];
 let currentBillItems = [];
+let pendingTableOrders = [];
+let selectedPendingOrder = null;
 let orderHistory = [];
 let udhariData = [];
 let expenseData = [];
@@ -16,7 +18,6 @@ function init() {
         showMainApp();
     }
     
-    // Set current month in selectors
     const today = new Date();
     const monthString = today.toISOString().slice(0, 7);
     const dateString = today.toISOString().slice(0, 10);
@@ -35,10 +36,7 @@ function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = `toast show ${type}`;
-    
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, 3000);
+    setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
 // Show/Hide Screens
@@ -62,6 +60,7 @@ function showMainApp() {
     updateMainItemSelect();
     updateAvailableItems();
     updateCurrentBill();
+    updatePendingOrders();
     updateHistory();
 }
 
@@ -83,15 +82,11 @@ function register() {
     }
 
     localStorage.setItem(`user_${username}`, JSON.stringify({
-        username: username,
-        password: password,
-        cafeName: cafeName
+        username, password, cafeName
     }));
 
     showAlert('registerAlert', 'Registration successful! Please login.', 'success');
-    setTimeout(() => {
-        showLogin();
-    }, 1500);
+    setTimeout(showLogin, 1500);
 }
 
 // Login
@@ -105,14 +100,12 @@ function login() {
     }
 
     const userDataStr = localStorage.getItem(`user_${username}`);
-    
     if (!userDataStr) {
         showAlert('loginAlert', 'Invalid username or password', 'error');
         return;
     }
 
     const userData = JSON.parse(userDataStr);
-    
     if (userData.password !== password) {
         showAlert('loginAlert', 'Invalid username or password', 'error');
         return;
@@ -121,7 +114,6 @@ function login() {
     currentUser = username;
     sessionStorage.setItem('loggedInUser', username);
     document.getElementById('cafeNameDisplay').textContent = userData.cafeName;
-    
     loadUserData();
     showMainApp();
 }
@@ -132,6 +124,7 @@ function logout() {
     sessionStorage.removeItem('loggedInUser');
     menuData = [];
     currentBillItems = [];
+    pendingTableOrders = [];
     orderHistory = [];
     udhariData = [];
     expenseData = [];
@@ -147,29 +140,28 @@ function loadUserData() {
     }
 
     const menuDataStr = localStorage.getItem(`menu_${currentUser}`);
-    if (menuDataStr) {
-        menuData = JSON.parse(menuDataStr);
-    }
+    if (menuDataStr) menuData = JSON.parse(menuDataStr);
+
+    const pendingOrdersStr = localStorage.getItem(`pending_${currentUser}`);
+    if (pendingOrdersStr) pendingTableOrders = JSON.parse(pendingOrdersStr);
 
     const historyDataStr = localStorage.getItem(`history_${currentUser}`);
-    if (historyDataStr) {
-        orderHistory = JSON.parse(historyDataStr);
-    }
+    if (historyDataStr) orderHistory = JSON.parse(historyDataStr);
 
     const udhariDataStr = localStorage.getItem(`udhari_${currentUser}`);
-    if (udhariDataStr) {
-        udhariData = JSON.parse(udhariDataStr);
-    }
+    if (udhariDataStr) udhariData = JSON.parse(udhariDataStr);
 
     const expenseDataStr = localStorage.getItem(`expenses_${currentUser}`);
-    if (expenseDataStr) {
-        expenseData = JSON.parse(expenseDataStr);
-    }
+    if (expenseDataStr) expenseData = JSON.parse(expenseDataStr);
 }
 
 // Save functions
 function saveMenuData() {
     localStorage.setItem(`menu_${currentUser}`, JSON.stringify(menuData));
+}
+
+function savePendingOrders() {
+    localStorage.setItem(`pending_${currentUser}`, JSON.stringify(pendingTableOrders));
 }
 
 function saveOrderHistory() {
@@ -188,19 +180,13 @@ function saveExpenseData() {
 function showAlert(elementId, message, type) {
     const alertDiv = document.getElementById(elementId);
     alertDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
-    setTimeout(() => {
-        alertDiv.innerHTML = '';
-    }, 3000);
+    setTimeout(() => alertDiv.innerHTML = '', 3000);
 }
 
 // Tab Switching
 function switchTab(tabName) {
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     
     document.getElementById(tabName).classList.add('active');
     event.target.classList.add('active');
@@ -208,6 +194,8 @@ function switchTab(tabName) {
     if (tabName === 'billing') {
         updateAvailableItems();
         updateCurrentBill();
+    } else if (tabName === 'pendingOrders') {
+        updatePendingOrders();
     } else if (tabName === 'history') {
         updateHistory();
     } else if (tabName === 'udhari') {
@@ -285,27 +273,21 @@ function updateMenuList() {
     list.innerHTML = menuData.map(mainItem => `
         <div class="menu-item">
             <h3>
-                ${mainItem.name}
+                <span>${mainItem.name}</span>
                 <button class="btn btn-danger btn-small" onclick="deleteMainItem(${mainItem.id})">Delete</button>
             </h3>
-
             ${mainItem.subItems.map(subItem => `
                 <div class="sub-item">
-                    <span>${subItem.name} — ₹${subItem.price}</span>
-                    <button class="btn btn-danger btn-small"
-                        onclick="deleteSubItem(${mainItem.id}, ${subItem.id})">
-                        Delete
-                    </button>
+                    <span>${subItem.name} – ₹${subItem.price}</span>
+                    <button class="btn btn-danger btn-small" onclick="deleteSubItem(${mainItem.id}, ${subItem.id})">Delete</button>
                 </div>
             `).join('')}
         </div>
     `).join('');
 }
 
-
 function updateAvailableItems() {
     const container = document.getElementById('availableItems');
-    
     if (menuData.length === 0) {
         container.innerHTML = '<p style="color:#666;">No items available</p>';
         return;
@@ -326,55 +308,28 @@ function updateAvailableItems() {
     `).join('');
 }
 
-
 function deleteMainItem(mainItemId) {
     if (!confirm("Delete this main item and all its sub items?")) return;
-
     menuData = menuData.filter(item => item.id !== mainItemId);
-
     saveMenuData();
     updateMenuList();
     updateMainItemSelect();
     updateAvailableItems();
-
     showToast("Main item deleted");
 }
 
 function deleteSubItem(mainItemId, subItemId) {
     if (!confirm("Delete this sub item?")) return;
-
     const mainItem = menuData.find(item => item.id === mainItemId);
     if (!mainItem) return;
-
     mainItem.subItems = mainItem.subItems.filter(sub => sub.id !== subItemId);
-
     saveMenuData();
     updateMenuList();
     updateAvailableItems();
-
     showToast("Sub item deleted");
 }
 
-
-function toggleSubItems(mainItemId) {
-    const subItemsContainer = document.getElementById(`sub-${mainItemId}`);
-    const isVisible = subItemsContainer.classList.contains('show');
-    
-    document.querySelectorAll('.sub-items-container').forEach(container => {
-        container.classList.remove('show');
-    });
-    
-    document.querySelectorAll('#availableItems .menu-item').forEach(item => {
-        item.classList.remove('selected');
-    });
-    
-    if (!isVisible) {
-        subItemsContainer.classList.add('show');
-        event.currentTarget.classList.add('selected');
-    }
-}
-
-// Billing
+// Billing - Adding items to current order
 function addToBill(mainItemId, subItemId) {
     const mainItem = menuData.find(item => item.id === mainItemId);
     const subItem = mainItem.subItems.find(item => item.id === subItemId);
@@ -390,7 +345,6 @@ function addToBill(mainItemId, subItemId) {
             quantity: 1
         });
     }
-
     updateCurrentBill();
 }
 
@@ -415,7 +369,7 @@ function updateCurrentBill() {
     const totalContainer = document.getElementById('billTotal');
 
     if (currentBillItems.length === 0) {
-        container.innerHTML = '<p style="color: #666;">No items in bill</p>';
+        container.innerHTML = '<p style="color: #666;">No items in order</p>';
         totalContainer.innerHTML = '<h3>Total: ₹0</h3>';
         return;
     }
@@ -436,13 +390,147 @@ function updateCurrentBill() {
                         <span style="font-weight: 600; min-width: 30px; text-align: center;">${item.quantity}</span>
                         <button class="quantity-btn" onclick="updateQuantity(${item.id}, 1)">+</button>
                     </div>
-                    <button class="btn btn-danger" onclick="removeFromBill(${item.id})">Remove</button>
+                    <button class="btn btn-danger btn-small" onclick="removeFromBill(${item.id})">Remove</button>
                 </div>
             </div>
         `;
     }).join('');
 
     totalContainer.innerHTML = `<h3>Total: ₹${total}</h3>`;
+}
+
+// Save Order to Pending - TABLE NUMBER IS NOW OPTIONAL
+function saveOrder() {
+    if (currentBillItems.length === 0) {
+        showToast('Please add items to the order', 'error');
+        return;
+    }
+
+    let tableNumber = document.getElementById('tableNumber').value.trim();
+    
+    // If no table number provided, generate one automatically
+    if (!tableNumber) {
+        const orderCount = pendingTableOrders.length + 1;
+        tableNumber = `Order-${orderCount}`;
+    }
+
+    // Check if table number already exists
+    const existingOrder = pendingTableOrders.find(o => o.tableNumber === tableNumber);
+    if (existingOrder) {
+        showToast('This table/order number already exists. Please use a different one.', 'error');
+        return;
+    }
+
+    const total = currentBillItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    const order = {
+        id: Date.now(),
+        tableNumber: tableNumber,
+        items: [...currentBillItems],
+        total: total,
+        savedAt: new Date().toLocaleString()
+    };
+
+    pendingTableOrders.push(order);
+    savePendingOrders();
+
+    currentBillItems = [];
+    document.getElementById('tableNumber').value = '';
+    updateCurrentBill();
+    showToast('Order saved as ' + tableNumber);
+}
+
+function clearCurrentOrder() {
+    if (currentBillItems.length === 0) return;
+    if (confirm('Clear current order?')) {
+        currentBillItems = [];
+        document.getElementById('tableNumber').value = '';
+        updateCurrentBill();
+        showToast('Order cleared');
+    }
+}
+
+// Pending Orders Management
+function updatePendingOrders() {
+    const container = document.getElementById('pendingOrdersList');
+    
+    if (pendingTableOrders.length === 0) {
+        container.innerHTML = '<p style="color: #666; text-align: center;">No pending orders</p>';
+        document.getElementById('selectedOrderDetails').innerHTML = '<p style="color: #666;">Select an order to complete billing</p>';
+        document.getElementById('paymentSection').classList.add('hidden');
+        return;
+    }
+
+    container.innerHTML = pendingTableOrders.map(order => `
+        <div class="table-order-card ${selectedPendingOrder && selectedPendingOrder.id === order.id ? 'selected-order' : ''}" 
+             onclick="selectPendingOrder(${order.id})">
+            <div class="table-header">
+                <div class="table-number">🍽️ ${order.tableNumber}</div>
+                <div style="color: #764ba2; font-weight: bold;">₹${order.total}</div>
+            </div>
+            <div style="font-size: 0.85em; color: #666; margin: 5px 0;">
+                Saved: ${order.savedAt}
+            </div>
+            <div class="history-items">
+                ${order.items.map(item => `
+                    <div>${item.name} × ${item.quantity} = ₹${item.price * item.quantity}</div>
+                `).join('')}
+            </div>
+            <button class="btn btn-danger btn-small" style="margin-top: 10px;" 
+                    onclick="event.stopPropagation(); deletePendingOrder(${order.id})">
+                Delete Order
+            </button>
+        </div>
+    `).join('');
+}
+
+function selectPendingOrder(orderId) {
+    selectedPendingOrder = pendingTableOrders.find(o => o.id === orderId);
+    selectedPaymentMode = '';
+    
+    document.getElementById('udhariCustomerName').value = '';
+    document.getElementById('udhariCustomerMobile').value = '';
+    document.getElementById('udhariCustomerSection').classList.add('hidden');
+    document.querySelectorAll('.payment-option').forEach(option => {
+        option.classList.remove('selected');
+    });
+
+    updatePendingOrders();
+    
+    const detailsContainer = document.getElementById('selectedOrderDetails');
+    detailsContainer.innerHTML = `
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+            <h3 style="color: #764ba2; margin-bottom: 10px;">🍽️ ${selectedPendingOrder.tableNumber}</h3>
+            <div style="margin: 10px 0;">
+                ${selectedPendingOrder.items.map(item => `
+                    <div style="padding: 5px 0; border-bottom: 1px solid #e0e0e0;">
+                        ${item.name} × ${item.quantity} = ₹${item.price * item.quantity}
+                    </div>
+                `).join('')}
+            </div>
+            <div style="font-size: 1.3em; font-weight: bold; color: #764ba2; margin-top: 10px; text-align: right;">
+                Total: ₹${selectedPendingOrder.total}
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('paymentSection').classList.remove('hidden');
+}
+
+function deletePendingOrder(orderId) {
+    if (!confirm('Delete this pending order?')) return;
+    
+    pendingTableOrders = pendingTableOrders.filter(o => o.id !== orderId);
+    savePendingOrders();
+    
+    if (selectedPendingOrder && selectedPendingOrder.id === orderId) {
+        selectedPendingOrder = null;
+        document.getElementById('selectedOrderDetails').innerHTML = '<p style="color: #666;">Select an order to complete billing</p>';
+        document.getElementById('paymentSection').classList.add('hidden');
+    }
+    
+    updatePendingOrders();
+    showToast('Order deleted');
 }
 
 function selectPayment(mode) {
@@ -460,10 +548,10 @@ function selectPayment(mode) {
     }
 }
 
-// Complete Bill - NO POPUP, NO AUTO PDF DOWNLOAD
-function completeBill() {
-    if (currentBillItems.length === 0) {
-        showToast('Please add items to the bill', 'error');
+// Complete Billing
+function completeBilling() {
+    if (!selectedPendingOrder) {
+        showToast('Please select an order', 'error');
         return;
     }
 
@@ -472,8 +560,6 @@ function completeBill() {
         return;
     }
 
-    const total = currentBillItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
     let customerName = '';
     let customerMobile = '';
     
@@ -488,9 +574,10 @@ function completeBill() {
 
     const order = {
         id: Date.now(),
+        tableNumber: selectedPendingOrder.tableNumber,
         date: new Date().toLocaleString(),
-        items: [...currentBillItems],
-        total: total,
+        items: [...selectedPendingOrder.items],
+        total: selectedPendingOrder.total,
         paymentMode: selectedPaymentMode,
         customerName: customerName,
         customerMobile: customerMobile
@@ -505,28 +592,26 @@ function completeBill() {
             orderId: order.id,
             customerName: customerName,
             customerMobile: customerMobile,
-            amount: total,
+            amount: order.total,
             date: new Date().toISOString(),
             paid: false,
-            items: [...currentBillItems]
+            items: [...order.items]
         });
         saveUdhariData();
-        showToast('Udhari order saved!');
-    } else {
-        // Just save the order, NO PDF download
-        showToast('Order completed!');
     }
 
-    // Reset
-    currentBillItems = [];
+    pendingTableOrders = pendingTableOrders.filter(o => o.id !== selectedPendingOrder.id);
+    savePendingOrders();
+
+    selectedPendingOrder = null;
     selectedPaymentMode = '';
     document.getElementById('udhariCustomerName').value = '';
     document.getElementById('udhariCustomerMobile').value = '';
-    document.getElementById('udhariCustomerSection').classList.add('hidden');
-    document.querySelectorAll('.payment-option').forEach(option => {
-        option.classList.remove('selected');
-    });
-    updateCurrentBill();
+    document.getElementById('selectedOrderDetails').innerHTML = '<p style="color: #666;">Select an order to complete billing</p>';
+    document.getElementById('paymentSection').classList.add('hidden');
+    
+    updatePendingOrders();
+    showToast('Billing completed successfully!');
 }
 
 // Expenses Management
@@ -624,7 +709,7 @@ function updateExpenseDisplay() {
 }
 
 function deleteExpense(expenseId) {
-    if (confirm('Are you sure you want to delete this expense?')) {
+    if (confirm('Delete this expense?')) {
         expenseData = expenseData.filter(exp => exp.id !== expenseId);
         saveExpenseData();
         updateExpenseDisplay();
@@ -633,7 +718,7 @@ function deleteExpense(expenseId) {
     }
 }
 
-// PDF Generation (Only used when clicking PDF button in history)
+// PDF Generation
 function generateBillPDF(order) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
@@ -652,28 +737,30 @@ function generateBillPDF(order) {
     
     doc.setFontSize(10);
     doc.text(`Order #: ${order.id}`, 20, 40);
-    doc.text(`Date: ${order.date}`, 20, 46);
-    doc.text(`Payment: ${order.paymentMode}`, 20, 52);
+    doc.text(`Table: ${order.tableNumber}`, 20, 46);
+    doc.text(`Date: ${order.date}`, 20, 52);
+    doc.text(`Payment: ${order.paymentMode}`, 20, 58);
     
     if (order.customerName) {
-        doc.text(`Customer: ${order.customerName}`, 20, 58);
+        doc.text(`Customer: ${order.customerName}`, 20, 64);
         if (order.customerMobile) {
-            doc.text(`Mobile: ${order.customerMobile}`, 20, 64);
+            doc.text(`Mobile: ${order.customerMobile}`, 20, 70);
         }
     }
     
-    doc.line(20, 70, 190, 70);
+    const yStart = order.customerName ? (order.customerMobile ? 76 : 70) : 64;
+    doc.line(20, yStart, 190, yStart);
     
     doc.setFont(undefined, 'bold');
-    doc.text('Item', 20, 78);
-    doc.text('Qty', 120, 78);
-    doc.text('Price', 145, 78);
-    doc.text('Total', 170, 78);
+    doc.text('Item', 20, yStart + 8);
+    doc.text('Qty', 120, yStart + 8);
+    doc.text('Price', 145, yStart + 8);
+    doc.text('Total', 170, yStart + 8);
     
-    doc.line(20, 80, 190, 80);
+    doc.line(20, yStart + 10, 190, yStart + 10);
     
     doc.setFont(undefined, 'normal');
-    let yPos = 88;
+    let yPos = yStart + 18;
     order.items.forEach(item => {
         const itemTotal = item.price * item.quantity;
         doc.text(item.name, 20, yPos);
@@ -696,7 +783,7 @@ function generateBillPDF(order) {
     doc.setFont(undefined, 'normal');
     doc.text('Thank you for your visit!', 105, yPos, { align: 'center' });
     
-    doc.save(`Bill_${order.id}.pdf`);
+    doc.save(`Bill_${order.tableNumber}_${order.id}.pdf`);
 }
 
 function generateMonthlyUdhariPDF(customerName, customerMobile, monthYear) {
@@ -801,7 +888,6 @@ function generateMonthlyUdhariPDF(customerName, customerMobile, monthYear) {
 }
 
 // History Display
-// History Display
 function updateHistory() {
     const container = document.getElementById('historyList');
     if (orderHistory.length === 0) {
@@ -831,7 +917,7 @@ function updateHistory() {
 
     const totalExpenses = expenseData.reduce((sum, exp) => sum + exp.amount, 0);
     const netCash = totalCash - totalExpenses;
-    const grandTotal = totalCash + totalOnline; // UDHARI NOT INCLUDED
+    const grandTotal = totalCash + totalOnline;
 
     const summaryHTML = `
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 15px; margin-bottom: 25px;">
@@ -891,7 +977,7 @@ function updateHistory() {
         return `
             <div class="history-item">
                 <div class="history-header">
-                    <span>Order #${order.id}</span>
+                    <span>🍽️ ${order.tableNumber} - Order #${order.id}</span>
                     <span>${order.date}</span>
                 </div>
                 ${order.customerName ? `<div style="margin: 5px 0; color: #764ba2; font-weight: 600;">Customer: ${order.customerName}${order.customerMobile ? ` (${order.customerMobile})` : ''}</div>` : ''}
@@ -1025,13 +1111,21 @@ function updateUdhariDisplay() {
 }
 
 // Udhari Management Functions
-// Delete entire month's udhari data
+function markAsPaid(udhariId) {
+    const udhari = udhariData.find(item => item.id === udhariId);
+    if (udhari) {
+        udhari.paid = true;
+        saveUdhariData();
+        updateUdhariDisplay();
+        showToast('Marked as paid');
+    }
+}
+
 function deleteMonthlyUdhari(monthYear) {
-    if (!confirm(`Are you sure you want to delete ALL udhari entries for this month?`)) return;
+    if (!confirm(`Delete ALL udhari entries for this month?`)) return;
     
     const [year, month] = monthYear.split('-');
     
-    // Get all udhari IDs to delete
     const udhariIdsToDelete = udhariData
         .filter(item => {
             const itemDate = new Date(item.date);
@@ -1040,14 +1134,12 @@ function deleteMonthlyUdhari(monthYear) {
         })
         .map(item => item.orderId);
     
-    // Remove from udhari data
     udhariData = udhariData.filter(item => {
         const itemDate = new Date(item.date);
         return !(itemDate.getFullYear() === parseInt(year) && 
                 (itemDate.getMonth() + 1) === parseInt(month));
     });
     
-    // Remove from order history
     orderHistory = orderHistory.filter(order => !udhariIdsToDelete.includes(order.id));
     
     saveUdhariData();
@@ -1057,13 +1149,11 @@ function deleteMonthlyUdhari(monthYear) {
     showToast('Monthly udhari deleted');
 }
 
-// Delete a specific customer's monthly udhari
 function deleteCustomerMonthlyUdhari(customerName, monthYear) {
     if (!confirm(`Delete all udhari for ${customerName}?`)) return;
     
     const [year, month] = monthYear.split('-');
     
-    // Get customer's udhari order IDs to delete
     const udhariIdsToDelete = udhariData
         .filter(item => {
             const itemDate = new Date(item.date);
@@ -1074,7 +1164,6 @@ function deleteCustomerMonthlyUdhari(customerName, monthYear) {
         })
         .map(item => item.orderId);
     
-    // Remove from udhari data
     udhariData = udhariData.filter(item => {
         const itemDate = new Date(item.date);
         const isTargetMonth = itemDate.getFullYear() === parseInt(year) && 
@@ -1084,7 +1173,6 @@ function deleteCustomerMonthlyUdhari(customerName, monthYear) {
         return !(isTargetMonth && isTargetCustomer);
     });
     
-    // Remove from order history
     orderHistory = orderHistory.filter(order => !udhariIdsToDelete.includes(order.id));
     
     saveUdhariData();
@@ -1094,18 +1182,14 @@ function deleteCustomerMonthlyUdhari(customerName, monthYear) {
     showToast('Customer data deleted');
 }
 
-// Delete a single udhari entry
 function deleteSingleUdhari(udhariId) {
     if (!confirm('Delete this entry?')) return;
     
-    // Find the order ID before deleting
     const udhariEntry = udhariData.find(item => item.id === udhariId);
     const orderIdToDelete = udhariEntry ? udhariEntry.orderId : null;
     
-    // Remove from udhari data
     udhariData = udhariData.filter(item => item.id !== udhariId);
     
-    // Remove from order history
     if (orderIdToDelete) {
         orderHistory = orderHistory.filter(order => order.id !== orderIdToDelete);
     }
@@ -1116,6 +1200,7 @@ function deleteSingleUdhari(udhariId) {
     updateHistory();
     showToast('Entry deleted');
 }
+
 // Helper Functions
 function getMonthName(monthNumber) {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',

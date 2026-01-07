@@ -19,9 +19,7 @@
                 <h1>☕ Cafe Billing</h1>
                 <p>Login to manage your cafe</p>
             </div>
-
             <div id="loginAlert"></div>
-
             <div class="form-group">
                 <label>Username</label>
                 <input type="text" id="loginUsername" placeholder="Enter username">
@@ -31,7 +29,6 @@
                 <input type="password" id="loginPassword" placeholder="Enter password">
             </div>
             <button class="btn btn-primary btn-full" onclick="login()">Login</button>
-            
             <div class="text-center">
                 <button class="link-btn" onclick="showRegister()">Don't have an account? Register</button>
             </div>
@@ -45,9 +42,7 @@
                 <h1>☕ Register</h1>
                 <p>Create your cafe account</p>
             </div>
-
             <div id="registerAlert"></div>
-
             <div class="form-group">
                 <label>Cafe Name</label>
                 <input type="text" id="registerCafeName" placeholder="Enter cafe name">
@@ -61,7 +56,6 @@
                 <input type="password" id="registerPassword" placeholder="Choose a password">
             </div>
             <button class="btn btn-primary btn-full" onclick="register()">Register</button>
-            
             <div class="text-center">
                 <button class="link-btn" onclick="showLogin()">Already have an account? Login</button>
             </div>
@@ -77,7 +71,8 @@
 
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('menu')">Menu Management</button>
-            <button class="tab-btn" onclick="switchTab('billing')">Billing</button>
+            <button class="tab-btn" onclick="switchTab('billing')">New Order</button>
+            <button class="tab-btn" onclick="switchTab('pendingOrders')">Pending Orders</button>
             <button class="tab-btn" onclick="switchTab('expenses')">Expenses</button>
             <button class="tab-btn" onclick="switchTab('udhari')">Udhari</button>
             <button class="tab-btn" onclick="switchTab('history')">History</button>
@@ -119,7 +114,7 @@
             </div>
         </div>
 
-        <!-- Billing Tab -->
+        <!-- New Order Tab -->
         <div id="billing" class="tab-content">
             <div class="grid-2">
                 <div class="card">
@@ -128,39 +123,70 @@
                 </div>
 
                 <div class="card">
-                    <h2>Current Bill</h2>
+                    <h2>Current Order</h2>
+                    
+                    <div class="form-group">
+                        <label>Table Number</label>
+                        <input type="text" id="tableNumber" placeholder="Enter table number (e.g., T1, T2)">
+                    </div>
+
                     <div id="currentBill"></div>
                     
                     <div class="bill-total" id="billTotal">
                         <h3>Total: ₹0</h3>
                     </div>
 
-                    <div class="payment-options">
-                        <div class="payment-option" onclick="selectPayment('Cash')">
-                            <h3>💵 Cash</h3>
-                        </div>
-                        <div class="payment-option" onclick="selectPayment('Online')">
-                            <h3>💳 Online</h3>
-                        </div>
-                        <div class="payment-option" onclick="selectPayment('Udhari')">
-                            <h3>📝 Udhari</h3>
-                        </div>
-                    </div>
-
-                    <div id="udhariCustomerSection" class="hidden" style="margin-bottom: 15px;">
-                        <div class="form-group">
-                            <label>Customer Name</label>
-                            <input type="text" id="udhariCustomerName" placeholder="Enter customer name">
-                        </div>
-                        <div class="form-group">
-                            <label>Mobile Number (Optional)</label>
-                            <input type="text" id="udhariCustomerMobile" placeholder="Enter mobile number">
-                        </div>
-                    </div>
-
-                    <button class="btn btn-success" onclick="completeBill()" style="width: 100%; padding: 15px; font-size: 16px;">
-                        Complete Order
+                    <button class="btn btn-warning btn-full" onclick="saveOrder()" style="margin-top: 15px; padding: 15px; font-size: 16px;">
+                        💾 Save Order
                     </button>
+                    <button class="btn btn-primary btn-full" onclick="clearCurrentOrder()" style="margin-top: 10px;">
+                        🗑️ Clear Order
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Orders Tab -->
+        <div id="pendingOrders" class="tab-content">
+            <div class="grid-3">
+                <div class="card" style="grid-column: span 2;">
+                    <h2>Pending Table Orders</h2>
+                    <div id="pendingOrdersList"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Complete Billing</h2>
+                    <div id="selectedOrderDetails"></div>
+
+                    <div id="paymentSection" class="hidden">
+                        <h3 style="color: #764ba2; margin: 20px 0 10px 0;">Select Payment Mode</h3>
+                        <div class="payment-options">
+                            <div class="payment-option" onclick="selectPayment('Cash')">
+                                <h3>💵 Cash</h3>
+                            </div>
+                            <div class="payment-option" onclick="selectPayment('Online')">
+                                <h3>💳 Online</h3>
+                            </div>
+                            <div class="payment-option" onclick="selectPayment('Udhari')">
+                                <h3>📝 Udhari</h3>
+                            </div>
+                        </div>
+
+                        <div id="udhariCustomerSection" class="hidden" style="margin-bottom: 15px;">
+                            <div class="form-group">
+                                <label>Customer Name</label>
+                                <input type="text" id="udhariCustomerName" placeholder="Enter customer name">
+                            </div>
+                            <div class="form-group">
+                                <label>Mobile Number (Optional)</label>
+                                <input type="text" id="udhariCustomerMobile" placeholder="Enter mobile number">
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success btn-full" onclick="completeBilling()" style="padding: 15px; font-size: 16px;">
+                            ✅ Complete Billing
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -211,13 +237,10 @@
         <div id="udhari" class="tab-content">
             <div class="card">
                 <h2>Udhari Management</h2>
-                
-                <!-- Month Selector -->
                 <div class="form-group" style="max-width: 300px;">
                     <label>Select Month</label>
                     <input type="month" id="monthSelector" onchange="updateUdhariDisplay()">
                 </div>
-
                 <div id="udhariSummary"></div>
                 <div id="udhariList"></div>
             </div>
