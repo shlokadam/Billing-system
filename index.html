@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cafe Billing System</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- jsPDF Library for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>☕ Cafe Billing</h1>
+                <p>Login to manage your cafe</p>
+            </div>
+
+            <div id="loginAlert"></div>
+
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="loginUsername" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="loginPassword" placeholder="Enter password">
+            </div>
+            <button class="btn btn-primary btn-full" onclick="login()">Login</button>
+            
+            <div class="text-center">
+                <button class="link-btn" onclick="showRegister()">Don't have an account? Register</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Screen -->
+    <div id="registerScreen" class="login-container hidden">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>☕ Register</h1>
+                <p>Create your cafe account</p>
+            </div>
+
+            <div id="registerAlert"></div>
+
+            <div class="form-group">
+                <label>Cafe Name</label>
+                <input type="text" id="registerCafeName" placeholder="Enter cafe name">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="registerUsername" placeholder="Choose a username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="registerPassword" placeholder="Choose a password">
+            </div>
+            <button class="btn btn-primary btn-full" onclick="register()">Register</button>
+            
+            <div class="text-center">
+                <button class="link-btn" onclick="showLogin()">Already have an account? Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="container hidden">
+        <div class="header-bar">
+            <h1>☕ <span id="cafeNameDisplay"></span></h1>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('menu')">Menu Management</button>
+            <button class="tab-btn" onclick="switchTab('billing')">Billing</button>
+            <button class="tab-btn" onclick="switchTab('expenses')">Expenses</button>
+            <button class="tab-btn" onclick="switchTab('udhari')">Udhari</button>
+            <button class="tab-btn" onclick="switchTab('history')">History</button>
+        </div>
+
+        <!-- Menu Management Tab -->
+        <div id="menu" class="tab-content active">
+            <div class="grid-2">
+                <div class="card">
+                    <h2>Add Main Item</h2>
+                    <div class="form-group">
+                        <label>Main Item Name</label>
+                        <input type="text" id="mainItemName" placeholder="e.g., Coffee, Tea, Snacks">
+                    </div>
+                    <button class="btn btn-primary" onclick="addMainItem()">Add Main Item</button>
+                </div>
+
+                <div class="card">
+                    <h2>Add Sub Item</h2>
+                    <div class="form-group">
+                        <label>Select Main Item</label>
+                        <select id="mainItemSelect"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sub Item Name</label>
+                        <input type="text" id="subItemName" placeholder="e.g., Cappuccino, Latte">
+                    </div>
+                    <div class="form-group">
+                        <label>Price (₹)</label>
+                        <input type="number" id="subItemPrice" placeholder="e.g., 120">
+                    </div>
+                    <button class="btn btn-primary" onclick="addSubItem()">Add Sub Item</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Menu Items</h2>
+                <div id="menuList"></div>
+            </div>
+        </div>
+
+        <!-- Billing Tab -->
+        <div id="billing" class="tab-content">
+            <div class="grid-2">
+                <div class="card">
+                    <h2>Available Items</h2>
+                    <div id="availableItems"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Current Bill</h2>
+                    <div id="currentBill"></div>
+                    
+                    <div class="bill-total" id="billTotal">
+                        <h3>Total: ₹0</h3>
+                    </div>
+
+                    <div class="payment-options">
+                        <div class="payment-option" onclick="selectPayment('Cash')">
+                            <h3>💵 Cash</h3>
+                        </div>
+                        <div class="payment-option" onclick="selectPayment('Online')">
+                            <h3>💳 Online</h3>
+                        </div>
+                        <div class="payment-option" onclick="selectPayment('Udhari')">
+                            <h3>📝 Udhari</h3>
+                        </div>
+                    </div>
+
+                    <div id="udhariCustomerSection" class="hidden" style="margin-bottom: 15px;">
+                        <div class="form-group">
+                            <label>Customer Name</label>
+                            <input type="text" id="udhariCustomerName" placeholder="Enter customer name">
+                        </div>
+                        <div class="form-group">
+                            <label>Mobile Number (Optional)</label>
+                            <input type="text" id="udhariCustomerMobile" placeholder="Enter mobile number">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-success" onclick="completeBill()" style="width: 100%; padding: 15px; font-size: 16px;">
+                        Complete Order
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expenses Tab -->
+        <div id="expenses" class="tab-content">
+            <div class="grid-2">
+                <div class="card">
+                    <h2>Add Daily Expense</h2>
+                    <div class="form-group">
+                        <label>Expense Category</label>
+                        <input type="text" id="expenseCategory" placeholder="e.g., Rent, Electricity, Supplies">
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (₹)</label>
+                        <input type="number" id="expenseAmount" placeholder="e.g., 500">
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Optional)</label>
+                        <input type="text" id="expenseDescription" placeholder="Add notes">
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="expenseDate">
+                    </div>
+                    <button class="btn btn-primary" onclick="addExpense()">Add Expense</button>
+                </div>
+
+                <div class="card">
+                    <h2>Today's Summary</h2>
+                    <div id="todayExpenseSummary"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">All Expenses</h2>
+                    <div class="form-group" style="margin: 0; max-width: 300px;">
+                        <label>Filter by Month</label>
+                        <input type="month" id="expenseMonthFilter" onchange="updateExpenseDisplay()">
+                    </div>
+                </div>
+                <div id="expenseList"></div>
+            </div>
+        </div>
+
+        <!-- Udhari Tab -->
+        <div id="udhari" class="tab-content">
+            <div class="card">
+                <h2>Udhari Management</h2>
+                
+                <!-- Month Selector -->
+                <div class="form-group" style="max-width: 300px;">
+                    <label>Select Month</label>
+                    <input type="month" id="monthSelector" onchange="updateUdhariDisplay()">
+                </div>
+
+                <div id="udhariSummary"></div>
+                <div id="udhariList"></div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="history" class="tab-content">
+            <div class="card">
+                <h2>Order History</h2>
+                <div id="historyList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
