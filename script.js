@@ -8,24 +8,26 @@ let orderHistory = [];
 let udhariData = [];
 let expenseData = [];
 let selectedPaymentMode = '';
+let isEditingOrder = false;
+let editingOrderId = null;
 
 // Initialize
 function init() {
-    const loggedInUser = sessionStorage.getItem('loggedInUser');
+    const loggedInUser = localStorage.getItem('loggedInUser');
     if (loggedInUser) {
         currentUser = loggedInUser;
         loadUserData();
         showMainApp();
     }
-    
+
     const today = new Date();
     const monthString = today.toISOString().slice(0, 7);
     const dateString = today.toISOString().slice(0, 10);
-    
+
     const monthSelector = document.getElementById('monthSelector');
     const expenseMonthFilter = document.getElementById('expenseMonthFilter');
     const expenseDate = document.getElementById('expenseDate');
-    
+
     if (monthSelector) monthSelector.value = monthString;
     if (expenseMonthFilter) expenseMonthFilter.value = monthString;
     if (expenseDate) expenseDate.value = dateString;
@@ -112,7 +114,7 @@ function login() {
     }
 
     currentUser = username;
-    sessionStorage.setItem('loggedInUser', username);
+    localStorage.setItem('loggedInUser', username);
     document.getElementById('cafeNameDisplay').textContent = userData.cafeName;
     loadUserData();
     showMainApp();
@@ -121,7 +123,7 @@ function login() {
 // Logout
 function logout() {
     currentUser = null;
-    sessionStorage.removeItem('loggedInUser');
+    localStorage.removeItem('loggedInUser');
     menuData = [];
     currentBillItems = [];
     pendingTableOrders = [];
@@ -187,7 +189,7 @@ function showAlert(elementId, message, type) {
 function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    
+
     document.getElementById(tabName).classList.add('active');
     event.target.classList.add('active');
 
@@ -367,15 +369,23 @@ function removeFromBill(itemId) {
 function updateCurrentBill() {
     const container = document.getElementById('currentBill');
     const totalContainer = document.getElementById('billTotal');
+    const saveBtn = document.getElementById('saveOrderBtn');
 
     if (currentBillItems.length === 0) {
         container.innerHTML = '<p style="color: #666;">No items in order</p>';
         totalContainer.innerHTML = '<h3>Total: ₹0</h3>';
+        if (saveBtn) saveBtn.innerHTML = '💾 Save Order';
         return;
     }
 
     let total = 0;
-    container.innerHTML = currentBillItems.map(item => {
+    const editingBadge = isEditingOrder ? '<div style="background: #ffc107; color: #333; padding: 5px 15px; border-radius: 20px; display: inline-block; margin-bottom: 15px; font-weight: 600;">✏️ Editing Order</div>' : '';
+
+    if (saveBtn) {
+        saveBtn.innerHTML = isEditingOrder ? '✅ Update Order' : '💾 Save Order';
+    }
+
+    container.innerHTML = editingBadge + currentBillItems.map(item => {
         const itemTotal = item.price * item.quantity;
         total += itemTotal;
         return `
@@ -407,37 +417,55 @@ function saveOrder() {
     }
 
     let tableNumber = document.getElementById('tableNumber').value.trim();
-    
+
     // If no table number provided, generate one automatically
     if (!tableNumber) {
         const orderCount = pendingTableOrders.length + 1;
         tableNumber = `Order-${orderCount}`;
     }
 
-    // Check if table number already exists
+    // Check if table number already exists (but allow if we're editing)
     const existingOrder = pendingTableOrders.find(o => o.tableNumber === tableNumber);
-    if (existingOrder) {
+    if (existingOrder && (!isEditingOrder || existingOrder.id !== editingOrderId)) {
         showToast('This table/order number already exists. Please use a different one.', 'error');
         return;
     }
 
     const total = currentBillItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-    const order = {
-        id: Date.now(),
-        tableNumber: tableNumber,
-        items: [...currentBillItems],
-        total: total,
-        savedAt: new Date().toLocaleString()
-    };
+    if (isEditingOrder) {
+        // Update existing order
+        const orderIndex = pendingTableOrders.findIndex(o => o.id === editingOrderId);
+        if (orderIndex !== -1) {
+            pendingTableOrders[orderIndex] = {
+                ...pendingTableOrders[orderIndex],
+                tableNumber: tableNumber,
+                items: [...currentBillItems],
+                total: total,
+                savedAt: new Date().toLocaleString()
+            };
+        }
+        showToast('Order updated successfully');
+        isEditingOrder = false;
+        editingOrderId = null;
+    } else {
+        // Create new order
+        const order = {
+            id: Date.now(),
+            tableNumber: tableNumber,
+            items: [...currentBillItems],
+            total: total,
+            savedAt: new Date().toLocaleString()
+        };
+        pendingTableOrders.push(order);
+        showToast('Order saved as ' + tableNumber);
+    }
 
-    pendingTableOrders.push(order);
     savePendingOrders();
 
     currentBillItems = [];
     document.getElementById('tableNumber').value = '';
     updateCurrentBill();
-    showToast('Order saved as ' + tableNumber);
 }
 
 function clearCurrentOrder() {
@@ -445,15 +473,35 @@ function clearCurrentOrder() {
     if (confirm('Clear current order?')) {
         currentBillItems = [];
         document.getElementById('tableNumber').value = '';
+        isEditingOrder = false;
+        editingOrderId = null;
         updateCurrentBill();
         showToast('Order cleared');
     }
 }
 
+// Edit Pending Order - NEW FUNCTION
+function editPendingOrder(orderId) {
+    const order = pendingTableOrders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Load order into current bill
+    currentBillItems = [...order.items];
+    document.getElementById('tableNumber').value = order.tableNumber;
+    isEditingOrder = true;
+    editingOrderId = orderId;
+
+    // Switch to billing tab
+    switchTab('billing');
+
+    updateCurrentBill();
+    showToast('Order loaded for editing', 'warning');
+}
+
 // Pending Orders Management
 function updatePendingOrders() {
     const container = document.getElementById('pendingOrdersList');
-    
+
     if (pendingTableOrders.length === 0) {
         container.innerHTML = '<p style="color: #666; text-align: center;">No pending orders</p>';
         document.getElementById('selectedOrderDetails').innerHTML = '<p style="color: #666;">Select an order to complete billing</p>';
@@ -476,10 +524,16 @@ function updatePendingOrders() {
                     <div>${item.name} × ${item.quantity} = ₹${item.price * item.quantity}</div>
                 `).join('')}
             </div>
-            <button class="btn btn-danger btn-small" style="margin-top: 10px;" 
-                    onclick="event.stopPropagation(); deletePendingOrder(${order.id})">
-                Delete Order
-            </button>
+            <div style="margin-top: 10px; display: flex; gap: 5px;">
+                <button class="btn btn-primary btn-small" 
+                        onclick="event.stopPropagation(); editPendingOrder(${order.id})">
+                    ✏️ Edit
+                </button>
+                <button class="btn btn-danger btn-small" 
+                        onclick="event.stopPropagation(); deletePendingOrder(${order.id})">
+                    Delete Order
+                </button>
+            </div>
         </div>
     `).join('');
 }
@@ -487,7 +541,7 @@ function updatePendingOrders() {
 function selectPendingOrder(orderId) {
     selectedPendingOrder = pendingTableOrders.find(o => o.id === orderId);
     selectedPaymentMode = '';
-    
+
     document.getElementById('udhariCustomerName').value = '';
     document.getElementById('udhariCustomerMobile').value = '';
     document.getElementById('udhariCustomerSection').classList.add('hidden');
@@ -496,7 +550,7 @@ function selectPendingOrder(orderId) {
     });
 
     updatePendingOrders();
-    
+
     const detailsContainer = document.getElementById('selectedOrderDetails');
     detailsContainer.innerHTML = `
         <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
@@ -513,22 +567,22 @@ function selectPendingOrder(orderId) {
             </div>
         </div>
     `;
-    
+
     document.getElementById('paymentSection').classList.remove('hidden');
 }
 
 function deletePendingOrder(orderId) {
     if (!confirm('Delete this pending order?')) return;
-    
+
     pendingTableOrders = pendingTableOrders.filter(o => o.id !== orderId);
     savePendingOrders();
-    
+
     if (selectedPendingOrder && selectedPendingOrder.id === orderId) {
         selectedPendingOrder = null;
         document.getElementById('selectedOrderDetails').innerHTML = '<p style="color: #666;">Select an order to complete billing</p>';
         document.getElementById('paymentSection').classList.add('hidden');
     }
-    
+
     updatePendingOrders();
     showToast('Order deleted');
 }
@@ -539,7 +593,7 @@ function selectPayment(mode) {
         option.classList.remove('selected');
     });
     event.target.closest('.payment-option').classList.add('selected');
-    
+
     const udhariSection = document.getElementById('udhariCustomerSection');
     if (mode === 'Udhari') {
         udhariSection.classList.remove('hidden');
@@ -562,7 +616,7 @@ function completeBilling() {
 
     let customerName = '';
     let customerMobile = '';
-    
+
     if (selectedPaymentMode === 'Udhari') {
         customerName = document.getElementById('udhariCustomerName').value.trim();
         if (!customerName) {
@@ -609,7 +663,7 @@ function completeBilling() {
     document.getElementById('udhariCustomerMobile').value = '';
     document.getElementById('selectedOrderDetails').innerHTML = '<p style="color: #666;">Select an order to complete billing</p>';
     document.getElementById('paymentSection').classList.add('hidden');
-    
+
     updatePendingOrders();
     showToast('Billing completed successfully!');
 }
@@ -637,7 +691,7 @@ function addExpense() {
     document.getElementById('expenseCategory').value = '';
     document.getElementById('expenseAmount').value = '';
     document.getElementById('expenseDescription').value = '';
-    
+
     saveExpenseData();
     updateExpenseDisplay();
     updateTodayExpenseSummary();
@@ -670,15 +724,15 @@ function updateTodayExpenseSummary() {
 function updateExpenseDisplay() {
     const selectedMonth = document.getElementById('expenseMonthFilter').value;
     const [year, month] = selectedMonth.split('-');
-    
+
     const monthExpenses = expenseData.filter(exp => {
         const expDate = new Date(exp.date);
-        return expDate.getFullYear() === parseInt(year) && 
-               (expDate.getMonth() + 1) === parseInt(month);
+        return expDate.getFullYear() === parseInt(year) &&
+            (expDate.getMonth() + 1) === parseInt(month);
     });
 
     const container = document.getElementById('expenseList');
-    
+
     if (monthExpenses.length === 0) {
         container.innerHTML = '<p style="color: #666; text-align: center;">No expenses for this month</p>';
         return;
@@ -722,43 +776,43 @@ function deleteExpense(expenseId) {
 function generateBillPDF(order) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    
+
     const userDataStr = localStorage.getItem(`user_${currentUser}`);
     const userData = JSON.parse(userDataStr);
     const cafeName = userData.cafeName;
-    
+
     doc.setFontSize(20);
     doc.setFont(undefined, 'bold');
     doc.text(cafeName, 105, 20, { align: 'center' });
-    
+
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
     doc.text('BILL RECEIPT', 105, 28, { align: 'center' });
-    
+
     doc.setFontSize(10);
     doc.text(`Order #: ${order.id}`, 20, 40);
     doc.text(`Table: ${order.tableNumber}`, 20, 46);
     doc.text(`Date: ${order.date}`, 20, 52);
     doc.text(`Payment: ${order.paymentMode}`, 20, 58);
-    
+
     if (order.customerName) {
         doc.text(`Customer: ${order.customerName}`, 20, 64);
         if (order.customerMobile) {
             doc.text(`Mobile: ${order.customerMobile}`, 20, 70);
         }
     }
-    
+
     const yStart = order.customerName ? (order.customerMobile ? 76 : 70) : 64;
     doc.line(20, yStart, 190, yStart);
-    
+
     doc.setFont(undefined, 'bold');
     doc.text('Item', 20, yStart + 8);
     doc.text('Qty', 120, yStart + 8);
     doc.text('Price', 145, yStart + 8);
     doc.text('Total', 170, yStart + 8);
-    
+
     doc.line(20, yStart + 10, 190, yStart + 10);
-    
+
     doc.setFont(undefined, 'normal');
     let yPos = yStart + 18;
     order.items.forEach(item => {
@@ -769,106 +823,106 @@ function generateBillPDF(order) {
         doc.text(`Rs ${itemTotal}`, 170, yPos);
         yPos += 8;
     });
-    
+
     doc.line(20, yPos, 190, yPos);
     yPos += 8;
-    
+
     doc.setFont(undefined, 'bold');
     doc.setFontSize(12);
     doc.text('TOTAL:', 145, yPos);
     doc.text(`Rs ${order.total}`, 170, yPos);
-    
+
     yPos += 15;
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
     doc.text('Thank you for your visit!', 105, yPos, { align: 'center' });
-    
+
     doc.save(`Bill_${order.tableNumber}_${order.id}.pdf`);
 }
 
 function generateMonthlyUdhariPDF(customerName, customerMobile, monthYear) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    
+
     const [year, month] = monthYear.split('-');
-    
+
     const customerUdhari = udhariData.filter(item => {
         const itemDate = new Date(item.date);
         return item.customerName === customerName &&
-               itemDate.getFullYear() === parseInt(year) && 
-               (itemDate.getMonth() + 1) === parseInt(month);
+            itemDate.getFullYear() === parseInt(year) &&
+            (itemDate.getMonth() + 1) === parseInt(month);
     });
-    
+
     const userDataStr = localStorage.getItem(`user_${currentUser}`);
     const userData = JSON.parse(userDataStr);
     const cafeName = userData.cafeName;
-    
+
     doc.setFontSize(20);
     doc.setFont(undefined, 'bold');
     doc.text(cafeName, 105, 20, { align: 'center' });
-    
+
     doc.setFontSize(12);
     doc.setFont(undefined, 'normal');
     doc.text('MONTHLY UDHARI STATEMENT', 105, 28, { align: 'center' });
-    
+
     doc.setFontSize(10);
     doc.text(`Customer: ${customerName}`, 20, 40);
     if (customerMobile) {
         doc.text(`Mobile: ${customerMobile}`, 20, 46);
     }
     doc.text(`Month: ${getMonthName(parseInt(month))} ${year}`, 20, customerMobile ? 52 : 46);
-    
+
     let yPos = customerMobile ? 60 : 54;
-    
+
     doc.line(20, yPos, 190, yPos);
     yPos += 8;
-    
+
     doc.setFont(undefined, 'bold');
     doc.text('Date', 20, yPos);
     doc.text('Items', 60, yPos);
     doc.text('Amount', 170, yPos);
-    
+
     yPos += 2;
     doc.line(20, yPos, 190, yPos);
     yPos += 8;
-    
+
     doc.setFont(undefined, 'normal');
     let totalAmount = 0;
-    
+
     customerUdhari.forEach(item => {
         const dateStr = new Date(item.date).toLocaleDateString();
         const itemsStr = item.items.map(i => `${i.name}(${i.quantity})`).join(', ');
-        
+
         if (yPos > 270) {
             doc.addPage();
             yPos = 20;
         }
-        
+
         doc.setFontSize(9);
         doc.text(dateStr, 20, yPos);
-        
+
         const splitItems = doc.splitTextToSize(itemsStr, 100);
         doc.text(splitItems, 60, yPos);
-        
+
         doc.text(`Rs ${item.amount}`, 170, yPos);
-        
+
         totalAmount += item.amount;
         yPos += splitItems.length * 6 + 4;
     });
-    
+
     yPos += 5;
     doc.line(20, yPos, 190, yPos);
     yPos += 10;
-    
+
     doc.setFont(undefined, 'bold');
     doc.setFontSize(12);
     doc.text('TOTAL AMOUNT:', 120, yPos);
     doc.text(`Rs ${totalAmount}`, 170, yPos);
-    
+
     const allPaid = customerUdhari.every(item => item.paid);
     const paidAmount = customerUdhari.filter(item => item.paid).reduce((sum, item) => sum + item.amount, 0);
     const pendingAmount = totalAmount - paidAmount;
-    
+
     yPos += 10;
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
@@ -877,13 +931,13 @@ function generateMonthlyUdhariPDF(customerName, customerMobile, monthYear) {
     doc.setTextColor(allPaid ? 0 : 255, allPaid ? 128 : 0, 0);
     doc.text(`Pending: Rs ${pendingAmount}`, 120, yPos);
     doc.setTextColor(0, 0, 0);
-    
+
     yPos += 15;
     doc.setFontSize(10);
     doc.text('Please clear the pending amount at your earliest convenience.', 105, yPos, { align: 'center' });
     yPos += 6;
     doc.text('Thank you for your business!', 105, yPos, { align: 'center' });
-    
+
     doc.save(`Udhari_${customerName.replace(/\s/g, '_')}_${getMonthName(parseInt(month))}_${year}.pdf`);
 }
 
@@ -970,10 +1024,10 @@ function updateHistory() {
     `;
 
     const ordersHTML = orderHistory.slice().reverse().map(order => {
-        const pdfButton = (order.paymentMode === 'Cash' || order.paymentMode === 'Online') 
+        const pdfButton = (order.paymentMode === 'Cash' || order.paymentMode === 'Online')
             ? `<button class="btn btn-primary btn-small" onclick='generateBillPDF(${JSON.stringify(order).replace(/'/g, "\\'")}))'>📄 PDF</button>`
             : '';
-        
+
         return `
             <div class="history-item">
                 <div class="history-header">
@@ -1004,13 +1058,13 @@ function updateHistory() {
 function updateUdhariDisplay() {
     const selectedMonth = document.getElementById('monthSelector').value;
     const [year, month] = selectedMonth.split('-');
-    
+
     const monthUdhari = udhariData.filter(item => {
         const itemDate = new Date(item.date);
-        return itemDate.getFullYear() === parseInt(year) && 
-               (itemDate.getMonth() + 1) === parseInt(month);
+        return itemDate.getFullYear() === parseInt(year) &&
+            (itemDate.getMonth() + 1) === parseInt(month);
     });
-    
+
     const customerGroups = {};
     monthUdhari.forEach(item => {
         if (!customerGroups[item.customerName]) {
@@ -1031,12 +1085,12 @@ function updateUdhariDisplay() {
             customerGroups[item.customerName].pending += item.amount;
         }
     });
-    
+
     const totalUdhari = monthUdhari.reduce((sum, item) => sum + item.amount, 0);
     const paidAmount = monthUdhari.filter(item => item.paid).reduce((sum, item) => sum + item.amount, 0);
     const pendingAmount = totalUdhari - paidAmount;
     const customerCount = Object.keys(customerGroups).length;
-    
+
     const summaryHTML = `
         <div class="month-summary">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -1064,8 +1118,8 @@ function updateUdhariDisplay() {
             </div>
         </div>
     `;
-    
-    const listHTML = Object.keys(customerGroups).length === 0 ? 
+
+    const listHTML = Object.keys(customerGroups).length === 0 ?
         '<p style="color: #666; text-align: center; margin-top: 20px;">No udhari entries for this month</p>' :
         Object.values(customerGroups).map(customer => `
             <div class="udhari-card">
@@ -1105,7 +1159,7 @@ function updateUdhariDisplay() {
                 </div>
             </div>
         `).join('');
-    
+
     document.getElementById('udhariSummary').innerHTML = summaryHTML;
     document.getElementById('udhariList').innerHTML = listHTML;
 }
@@ -1123,25 +1177,25 @@ function markAsPaid(udhariId) {
 
 function deleteMonthlyUdhari(monthYear) {
     if (!confirm(`Delete ALL udhari entries for this month?`)) return;
-    
+
     const [year, month] = monthYear.split('-');
-    
+
     const udhariIdsToDelete = udhariData
         .filter(item => {
             const itemDate = new Date(item.date);
-            return itemDate.getFullYear() === parseInt(year) && 
-                   (itemDate.getMonth() + 1) === parseInt(month);
+            return itemDate.getFullYear() === parseInt(year) &&
+                (itemDate.getMonth() + 1) === parseInt(month);
         })
         .map(item => item.orderId);
-    
+
     udhariData = udhariData.filter(item => {
         const itemDate = new Date(item.date);
-        return !(itemDate.getFullYear() === parseInt(year) && 
-                (itemDate.getMonth() + 1) === parseInt(month));
+        return !(itemDate.getFullYear() === parseInt(year) &&
+            (itemDate.getMonth() + 1) === parseInt(month));
     });
-    
+
     orderHistory = orderHistory.filter(order => !udhariIdsToDelete.includes(order.id));
-    
+
     saveUdhariData();
     saveOrderHistory();
     updateUdhariDisplay();
@@ -1151,30 +1205,30 @@ function deleteMonthlyUdhari(monthYear) {
 
 function deleteCustomerMonthlyUdhari(customerName, monthYear) {
     if (!confirm(`Delete all udhari for ${customerName}?`)) return;
-    
+
     const [year, month] = monthYear.split('-');
-    
+
     const udhariIdsToDelete = udhariData
         .filter(item => {
             const itemDate = new Date(item.date);
-            const isTargetMonth = itemDate.getFullYear() === parseInt(year) && 
-                                  (itemDate.getMonth() + 1) === parseInt(month);
+            const isTargetMonth = itemDate.getFullYear() === parseInt(year) &&
+                (itemDate.getMonth() + 1) === parseInt(month);
             const isTargetCustomer = item.customerName === customerName;
             return isTargetMonth && isTargetCustomer;
         })
         .map(item => item.orderId);
-    
+
     udhariData = udhariData.filter(item => {
         const itemDate = new Date(item.date);
-        const isTargetMonth = itemDate.getFullYear() === parseInt(year) && 
-                              (itemDate.getMonth() + 1) === parseInt(month);
+        const isTargetMonth = itemDate.getFullYear() === parseInt(year) &&
+            (itemDate.getMonth() + 1) === parseInt(month);
         const isTargetCustomer = item.customerName === customerName;
-        
+
         return !(isTargetMonth && isTargetCustomer);
     });
-    
+
     orderHistory = orderHistory.filter(order => !udhariIdsToDelete.includes(order.id));
-    
+
     saveUdhariData();
     saveOrderHistory();
     updateUdhariDisplay();
@@ -1184,16 +1238,16 @@ function deleteCustomerMonthlyUdhari(customerName, monthYear) {
 
 function deleteSingleUdhari(udhariId) {
     if (!confirm('Delete this entry?')) return;
-    
+
     const udhariEntry = udhariData.find(item => item.id === udhariId);
     const orderIdToDelete = udhariEntry ? udhariEntry.orderId : null;
-    
+
     udhariData = udhariData.filter(item => item.id !== udhariId);
-    
+
     if (orderIdToDelete) {
         orderHistory = orderHistory.filter(order => order.id !== orderIdToDelete);
     }
-    
+
     saveUdhariData();
     saveOrderHistory();
     updateUdhariDisplay();
@@ -1204,7 +1258,7 @@ function deleteSingleUdhari(udhariId) {
 // Helper Functions
 function getMonthName(monthNumber) {
     const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                   'July', 'August', 'September', 'October', 'November', 'December'];
+        'July', 'August', 'September', 'October', 'November', 'December'];
     return months[monthNumber - 1];
 }
 
