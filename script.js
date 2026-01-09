@@ -67,58 +67,51 @@ function showMainApp() {
 }
 
 // Register
-function register() {
-    const cafeName = document.getElementById('registerCafeName').value.trim();
-    const username = document.getElementById('registerUsername').value.trim();
-    const password = document.getElementById('registerPassword').value.trim();
+async function register() {
+    const cafeName = document.getElementById("registerCafeName").value;
+    const username = document.getElementById("registerUsername").value;
+    const password = document.getElementById("registerPassword").value;
 
-    if (!cafeName || !username || !password) {
-        showAlert('registerAlert', 'Please fill all fields', 'error');
-        return;
+    const res = await fetch("http://localhost:5000/register", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ cafeName, username, password })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+        showAlert("registerAlert", data.error, "error");
+    } else {
+        showAlert("registerAlert", "Registration successful", "success");
+        setTimeout(showLogin, 1000);
     }
-
-    const existingUser = localStorage.getItem(`user_${username}`);
-    if (existingUser) {
-        showAlert('registerAlert', 'Username already exists', 'error');
-        return;
-    }
-
-    localStorage.setItem(`user_${username}`, JSON.stringify({
-        username, password, cafeName
-    }));
-
-    showAlert('registerAlert', 'Registration successful! Please login.', 'success');
-    setTimeout(showLogin, 1500);
 }
+
 
 // Login
-function login() {
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value.trim();
+async function login() {
+    const username = document.getElementById("loginUsername").value;
+    const password = document.getElementById("loginPassword").value;
 
-    if (!username || !password) {
-        showAlert('loginAlert', 'Please fill all fields', 'error');
-        return;
+    const res = await fetch("http://localhost:5000/login", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+        showAlert("loginAlert", data.error, "error");
+    } else {
+        currentUser = username;
+        localStorage.setItem("loggedInUser", username);
+        document.getElementById("cafeNameDisplay").textContent = data.cafeName;
+        showMainApp();
     }
-
-    const userDataStr = localStorage.getItem(`user_${username}`);
-    if (!userDataStr) {
-        showAlert('loginAlert', 'Invalid username or password', 'error');
-        return;
-    }
-
-    const userData = JSON.parse(userDataStr);
-    if (userData.password !== password) {
-        showAlert('loginAlert', 'Invalid username or password', 'error');
-        return;
-    }
-
-    currentUser = username;
-    localStorage.setItem('loggedInUser', username);
-    document.getElementById('cafeNameDisplay').textContent = userData.cafeName;
-    loadUserData();
-    showMainApp();
 }
+
 
 // Logout
 function logout() {
